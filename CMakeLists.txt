@@ -43,13 +43,31 @@ file(GLOB_RECURSE HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/include/*.hpp
 )
 
+# Collect documentation and resource files for IDE visibility
+file(GLOB_RECURSE DOC_FILES
+    ${CMAKE_CURRENT_SOURCE_DIR}/docs/*.md
+)
+
+file(GLOB_RECURSE RESOURCE_FILES
+    ${CMAKE_CURRENT_SOURCE_DIR}/resources/*
+)
+
 # Create executable
-add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS})
+add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS} ${DOC_FILES} ${RESOURCE_FILES})
+
+# Organize files in Xcode groups
+source_group("Documentation" FILES ${DOC_FILES})
+source_group("Resources" FILES ${RESOURCE_FILES})
 
 # Disable app sandboxing for macOS development
 if(APPLE)
     set_target_properties(${PROJECT_NAME} PROPERTIES
         XCODE_ATTRIBUTE_ENABLE_HARDENED_RUNTIME NO
+        XCODE_ATTRIBUTE_ENABLE_APP_SANDBOX NO
+        MACOSX_BUNDLE_BUNDLE_NAME "MiniMicro2"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "org.miniscript.minimicro2"
+        MACOSX_BUNDLE TRUE
+        XCODE_SCHEME_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     )
 endif()
 
@@ -69,12 +87,22 @@ elseif(UNIX AND NOT APPLE)
 endif()
 
 # Copy resources to build directory
-add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_CURRENT_SOURCE_DIR}/resources
-        $<TARGET_FILE_DIR:${PROJECT_NAME}>/resources
-    COMMENT "Copying resources to build directory"
-)
+if(APPLE)
+    # For macOS bundles, copy to Contents/Resources
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            ${CMAKE_CURRENT_SOURCE_DIR}/resources
+            $<TARGET_FILE_DIR:${PROJECT_NAME}>/../Resources/resources
+        COMMENT "Copying resources to bundle"
+    )
+else()
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            ${CMAKE_CURRENT_SOURCE_DIR}/resources
+            $<TARGET_FILE_DIR:${PROJECT_NAME}>/resources
+        COMMENT "Copying resources to build directory"
+    )
+endif()
 
 # Install targets
 install(TARGETS ${PROJECT_NAME} DESTINATION bin)

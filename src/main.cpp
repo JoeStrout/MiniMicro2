@@ -1,4 +1,10 @@
 #include "raylib.h"
+#include "ResourcePath.h"
+
+// Window configuration and other constants
+const int windowWidth = 1024;
+const int windowHeight = 768;
+const Color bezelColor = { 218, 209, 185, 255 };
 
 Texture2D LoadTextureOrFail(const char* path) {
 	Texture2D tex = LoadTexture(path);
@@ -8,21 +14,29 @@ Texture2D LoadTextureOrFail(const char* path) {
 	return tex;
 }
 
+void drawBezel() {
+	static bool initialized = false;
+	static Texture2D bezelTexture, stickerTexture;
+	if (!initialized) {
+		bezelTexture = LoadTextureOrFail(GetResourceFile("images/3DBezel.png").c_str());
+		stickerTexture = LoadTextureOrFail(GetResourceFile("images/MiniMicroSticker.png").c_str());
+		initialized = true;
+	}
+	DrawTexture(bezelTexture, 0, 0, bezelColor);
+	DrawTextureEx(stickerTexture,
+				  (Vector2){windowWidth - 56 - 32, windowHeight - 42 - 24},
+				  0,
+				  64.0f / stickerTexture.width,
+				  WHITE);
+}
+
 int main() {
-    // Window configuration
-    const int windowWidth = 1024;
-    const int windowHeight = 768;
-	const Color bezelColor = { 218, 209, 185, 255 };
-	
     // Initialize window and other Raylib systems
     InitWindow(windowWidth, windowHeight, "Mini Micro 2");
     SetTargetFPS(60);
 	InitAudioDevice();
 
-    // Load textures and sounds
-	Texture2D bezelTexture = LoadTextureOrFail("resources/images/3DBezel.png");
-	Texture2D stickerTexture = LoadTextureOrFail("resources/images/MiniMicroSticker.png");
-	Sound bootupSound = LoadSound("resources/sounds/startup-chime.wav");
+	Sound bootupSound = LoadSound(GetResourceFile("sounds/startup-chime.wav").c_str());
 	//Sound beepSound = LoadSound("resources/sounds/beep-single.wav");
 	
 	PlaySound(bootupSound);
@@ -34,24 +48,13 @@ int main() {
 
         // Draw
         BeginDrawing();
-
-        // Clear background to black
         ClearBackground(BLACK);
-
-		DrawTexture(bezelTexture, 0, 0, bezelColor);
-		DrawTextureEx(stickerTexture,
-					  (Vector2){windowWidth - 56 - 32, windowHeight - 42 - 24},
-					  0,
-					  64.0f / stickerTexture.width,
-					  WHITE);
-
+		drawBezel();
         EndDrawing();
     }
 
     // Cleanup
-	UnloadTexture(bezelTexture);
-	UnloadTexture(stickerTexture);
-
+	UnloadSound(bootupSound);
 	CloseWindow();
 
     return 0;
