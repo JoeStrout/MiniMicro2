@@ -9,6 +9,9 @@ public:
     Display();
     virtual ~Display();
 
+    // Update this display layer (for animations, cursor blinking, etc.)
+    virtual void Update(float deltaTime) {}
+
     // Render this display layer
     virtual void Render() = 0;
 

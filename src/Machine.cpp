@@ -18,7 +18,14 @@ Machine::~Machine() {
 }
 
 void Machine::Update() {
-    // TODO: Handle input and other updates
+    // Update all displays (for cursor blinking, animations, etc.)
+    float deltaTime = GetFrameTime();
+    for (int i = 0; i < kDisplayCount; i++) {
+        if (displays[i]) {
+            displays[i]->Update(deltaTime);
+        }
+    }
+    // TODO: Handle input
 }
 
 void Machine::Render() {

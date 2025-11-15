@@ -2,6 +2,7 @@
 #include "ResourcePath.h"
 #include "Machine.h"
 #include "SolidColorDisplay.h"
+#include "TextDisplay.h"
 
 // Window configuration and other constants
 const int windowWidth = 1024;
@@ -44,11 +45,22 @@ int main() {
 	// Create the machine
 	Machine machine;
 
-	// Set display 0 to a nice blue color for testing
-	SolidColorDisplay* display0 = static_cast<SolidColorDisplay*>(machine.GetDisplay(0));
-	if (display0) {
-		display0->SetColor((Color){67, 108, 172, 255});
-	}
+	// Set display 1 to a nice blue color for testing
+	SolidColorDisplay* display1 = new SolidColorDisplay();
+	display1->SetColor((Color){33, 33, 99, 255});
+	machine.SetDisplay(1, display1);
+	
+	// Create a TextDisplay for layer 0
+	TextDisplay* textDisplay = new TextDisplay();
+	textDisplay->LoadFont(GetResourceFile("images/ScreenFont.png").c_str());
+	textDisplay->SetTextColor(GREEN);
+	machine.SetDisplay(0, textDisplay);
+
+	// Print some test text
+	textDisplay->Print("Mini Micro 2\n");
+	textDisplay->Print("Text Display System\n");
+	textDisplay->Print("Ready!\n");
+	textDisplay->ShowCursor();
 
     // Main game loop
     while (!WindowShouldClose()) {
