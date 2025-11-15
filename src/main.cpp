@@ -3,6 +3,8 @@
 #include "Machine.h"
 #include "SolidColorDisplay.h"
 #include "TextDisplay.h"
+#include "ScreenFont.h"
+#include "Console.h"
 
 // Window configuration and other constants
 const int windowWidth = 1024;
@@ -42,6 +44,12 @@ int main() {
 	Sound bootupSound = LoadSound(GetResourceFile("sounds/startup-chime.wav").c_str());
 	PlaySound(bootupSound);
 
+	// Load the screen font shader
+	ScreenFont::LoadShader(
+		GetResourceFile("shaders/screenfont.vs").c_str(),
+		GetResourceFile("shaders/screenfont.fs").c_str()
+	);
+
 	// Create the machine
 	Machine machine;
 
@@ -56,16 +64,28 @@ int main() {
 	textDisplay->SetTextColor(GREEN);
 	machine.SetDisplay(0, textDisplay);
 
-	// Print some test text
-	textDisplay->Print("Mini Micro 2\n");
-	textDisplay->Print("Text Display System\n");
-	textDisplay->Print("Ready!\n");
-	textDisplay->ShowCursor();
+	// Create console
+	Console console(textDisplay);
+	console.InitKeyboardMapping();  // Initialize keyboard layout mapping
+	console.SetOnInputDone([&](const std::string& input) {
+		textDisplay->Print("You said: ");
+		textDisplay->Print(input);
+		textDisplay->Print("\n]");
+		console.StartInput();
+	});
+
+	// Print welcome message
+	textDisplay->Print("Mini Micro 2 Console Test\n");
+	textDisplay->Print("Type something and press Enter!\n");
+	textDisplay->Print("]");
+	console.StartInput();
 
     // Main game loop
     while (!WindowShouldClose()) {
         // Update
+		float deltaTime = GetFrameTime();
         machine.Update();
+		console.Update(deltaTime);
 
         // Draw
         BeginDrawing();
@@ -76,6 +96,7 @@ int main() {
 
     // Cleanup
 	UnloadSound(bootupSound);
+	ScreenFont::UnloadShader();
 	CloseWindow();
 
     return 0;

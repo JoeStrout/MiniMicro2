@@ -13,6 +13,10 @@ public:
     // Load a font texture (should be 16x16 character grid)
     bool Load(const char* texturePath);
 
+    // Load the shader (call once, before using any ScreenFont)
+    static bool LoadShader(const char* vertexPath, const char* fragmentPath);
+    static void UnloadShader();
+
     // Get the position in the font grid for a Unicode character
     int GetFontPosition(int unicode) const;
 
@@ -30,6 +34,12 @@ private:
     int charWidth;
     int charHeight;
     bool textureLoaded;
+
+    // Shared shader for all ScreenFont instances
+    static Shader shader;
+    static int foreColorLoc;
+    static int backColorLoc;
+    static bool shaderLoaded;
 };
 
 #endif // SCREEN_FONT_H

@@ -1,6 +1,12 @@
 #include "ScreenFont.h"
 #include "raylib.h"
 
+// Static member initialization
+Shader ScreenFont::shader = {0};
+int ScreenFont::foreColorLoc = -1;
+int ScreenFont::backColorLoc = -1;
+bool ScreenFont::shaderLoaded = false;
+
 ScreenFont::ScreenFont()
     : charWidth(0), charHeight(0), textureLoaded(false) {
 }
@@ -8,6 +14,32 @@ ScreenFont::ScreenFont()
 ScreenFont::~ScreenFont() {
     if (textureLoaded) {
         UnloadTexture(fontTexture);
+    }
+}
+
+bool ScreenFont::LoadShader(const char* vertexPath, const char* fragmentPath) {
+    if (shaderLoaded) {
+        ::UnloadShader(shader);
+    }
+
+    shader = ::LoadShader(vertexPath, fragmentPath);
+    if (shader.id == 0) {
+        shaderLoaded = false;
+        return false;
+    }
+
+    // Get shader uniform locations
+    foreColorLoc = GetShaderLocation(shader, "foreColor");
+    backColorLoc = GetShaderLocation(shader, "backColor");
+    shaderLoaded = true;
+
+    return true;
+}
+
+void ScreenFont::UnloadShader() {
+    if (shaderLoaded) {
+        ::UnloadShader(shader);
+        shaderLoaded = false;
     }
 }
 
@@ -91,7 +123,7 @@ void ScreenFont::DrawChar(int unicode, float x, float y, Color foreColor, Color 
     int charRow = fontPos / 16;
     int charCol = fontPos % 16;
 
-    // Source rectangle in the texture (Y is flipped in OpenGL textures)
+    // Source rectangle in the texture
     Rectangle source = {
         (float)(charCol * charWidth),
         (float)(charRow * charHeight),
@@ -106,11 +138,33 @@ void ScreenFont::DrawChar(int unicode, float x, float y, Color foreColor, Color 
         (float)charHeight
     };
 
-    // Draw background (only if not transparent)
-    if (backColor.a > 0) {
-        DrawRectangleRec(dest, backColor);
-    }
+    if (shaderLoaded) {
+        // Use shader to render with fore/back colors
+        // Convert colors to normalized float arrays
+        float foreColorNorm[4] = {
+            foreColor.r / 255.0f,
+            foreColor.g / 255.0f,
+            foreColor.b / 255.0f,
+            foreColor.a / 255.0f
+        };
+        float backColorNorm[4] = {
+            backColor.r / 255.0f,
+            backColor.g / 255.0f,
+            backColor.b / 255.0f,
+            backColor.a / 255.0f
+        };
 
-    // Draw character from texture
-    DrawTexturePro(fontTexture, source, dest, (Vector2){0, 0}, 0.0f, foreColor);
+        SetShaderValue(shader, foreColorLoc, foreColorNorm, SHADER_UNIFORM_VEC4);
+        SetShaderValue(shader, backColorLoc, backColorNorm, SHADER_UNIFORM_VEC4);
+
+        BeginShaderMode(shader);
+        DrawTexturePro(fontTexture, source, dest, (Vector2){0, 0}, 0.0f, WHITE);
+        EndShaderMode();
+    } else {
+        // Fallback: draw background and character separately
+        if (backColor.a > 0) {
+            DrawRectangleRec(dest, backColor);
+        }
+        DrawTexturePro(fontTexture, source, dest, (Vector2){0, 0}, 0.0f, foreColor);
+    }
 }
