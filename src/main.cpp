@@ -1,5 +1,7 @@
 #include "raylib.h"
 #include "ResourcePath.h"
+#include "Machine.h"
+#include "SolidColorDisplay.h"
 
 // Window configuration and other constants
 const int windowWidth = 1024;
@@ -37,18 +39,25 @@ int main() {
 	InitAudioDevice();
 
 	Sound bootupSound = LoadSound(GetResourceFile("sounds/startup-chime.wav").c_str());
-	//Sound beepSound = LoadSound("resources/sounds/beep-single.wav");
-	
 	PlaySound(bootupSound);
+
+	// Create the machine
+	Machine machine;
+
+	// Set display 0 to a nice blue color for testing
+	SolidColorDisplay* display0 = static_cast<SolidColorDisplay*>(machine.GetDisplay(0));
+	if (display0) {
+		display0->SetColor((Color){67, 108, 172, 255});
+	}
 
     // Main game loop
     while (!WindowShouldClose()) {
         // Update
-        // (Nothing to update yet)
+        machine.Update();
 
         // Draw
         BeginDrawing();
-        ClearBackground(BLACK);
+		machine.Render();
 		drawBezel();
         EndDrawing();
     }
