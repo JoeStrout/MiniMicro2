@@ -13,7 +13,7 @@
 //     must therefore NOT also call key.update, or every key arrives twice.
 
 import "importUtil"
-ensureImport ["Display", "TextDisplay", "color", "key", "mouse", "listUtil"]
+ensureImport ["Display", "TextDisplay", "color", "key", "mouse"]
 
 rl = raylib
 

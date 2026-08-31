@@ -17,7 +17,7 @@
 // map and live with the consequences.
 
 import "importUtil"
-ensureImport ["Console", "key", "listUtil", "stringUtil"]
+ensureImport ["Console", "key"]
 
 _EOL = char(13)
 _TAB = char(9)
@@ -97,7 +97,10 @@ end function
 // Names the shell keeps to itself.  Seeding copies our whole globals map, which
 // is the point -- the child gets the entire library layer -- but it would also
 // hand a user program the shell's own console, interpreter, and boot-time
-// resources.  There is no unset-a-global, so these are seeded over with null.
+// resources.  So they are filtered out of the seed rather than seeded and then
+// cleared: the Interp API has setGlobal but no removeGlobal, and setting them
+// to null would leave sixteen junk names in the child's globals -- visible to
+// `globals`, to pprint, and to the snapshot /sys/startup.ms takes for `wtf`.
 _privateNames = ["shell", "console", "bootDir", "bootupSound", "bezelTexture",
    "bezelColor", "stickerTexture", "diskInsertedSound", "diskEjectedSound",
    "screenCamera", "updateCallbacks", "_update", "_handleDrops",
@@ -153,10 +156,11 @@ Shell.reset = function
 		self.interp.dispose
 	end if
 	self.interp = Interp.create
-	self.interp.setGlobals globals
-	for name in _privateNames
-		self.interp.setGlobal name, null
+	seed = {}
+	for kv in globals
+		if _privateNames.indexOf(kv.key) == null then seed[kv.key] = @kv.value
 	end for
+	self.interp.setGlobals seed
 	self.interp.setGlobal "env", self.env
 	self.interp.setGlobal "_req", self.req
 	self.interp.setGlobal "print", @_childPrint
