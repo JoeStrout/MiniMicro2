@@ -8,6 +8,8 @@
 // with Soda; mm/ is the Mini Micro shell (REPL, editor, file browser); sys/ is
 // the /sys disk the user sees from the command line.
 
+rl = raylib
+
 // Import search path.  The first entry is the running script's own directory,
 // so a user program can import modules sitting next to it.  The other two must
 // NOT be written in terms of $MS_SCRIPT_DIR: the host repoints that variable at
@@ -27,10 +29,10 @@ globals.version = version + {
 	"hostName": "Mini Micro",
 	"hostInfo": "http://miniscript.org/MiniMicro"}
 
-raylib.SetTraceLogLevel raylib.LOG_WARNING
-raylib.InitWindow 1024, 768
-raylib.SetWindowTitle "Mini Micro 2"
-raylib.SetTargetFPS 60
+rl.SetTraceLogLevel rl.LOG_WARNING
+rl.InitWindow 1024, 768
+rl.SetWindowTitle "Mini Micro 2"
+rl.SetTargetFPS 60
 
 // Our own resources live on /hw, the hardware disk: the host mounts this
 // file's directory there at boot.  These used to be written relative to the
@@ -38,15 +40,15 @@ raylib.SetTargetFPS 60
 // The chime is played by /sys/startup.ms, through the _startupChime the shell
 // seeds for it -- that is where env.bootOpts can turn it off.  Loaded here
 // because /hw is ours, not the shell's.
-bootupSound = raylib.LoadSound("/hw/sounds/startup-chime.wav")
+bootupSound = rl.LoadSound("/hw/sounds/startup-chime.wav")
 
-bezelTexture = raylib.LoadTexture("/hw/images/3DBezel.png")
+bezelTexture = rl.LoadTexture("/hw/images/3DBezel.png")
 bezelColor = [218, 208, 185, 255]
-stickerTexture = raylib.LoadTexture("/hw/images/MiniMicroSticker.png")
+stickerTexture = rl.LoadTexture("/hw/images/MiniMicroSticker.png")
 print "sticker: " + stickerTexture
 
-diskInsertedSound = raylib.LoadSound("/hw/sounds/disk-inserted.wav")
-diskEjectedSound = raylib.LoadSound("/hw/sounds/disk-ejected.wav")	// (for the shell's eject)
+diskInsertedSound = rl.LoadSound("/hw/sounds/disk-inserted.wav")
+diskEjectedSound = rl.LoadSound("/hw/sounds/disk-ejected.wav")	// (for the shell's eject)
 
 import "importUtil"
 
@@ -72,30 +74,30 @@ globals.window = {}
 window.title = "Mini Micro 2"
 
 window.width = function
-	return raylib.GetScreenWidth
+	return rl.GetScreenWidth
 end function
 
 window.height = function
-	return raylib.GetScreenHeight
+	return rl.GetScreenHeight
 end function
 
 window.fullScreen = function
-	return raylib.IsWindowFullscreen
+	return rl.IsWindowFullscreen
 end function
 
 window.setSize = function(w=960, h=640)
-	raylib.SetWindowSize w, h
+	rl.SetWindowSize w, h
 end function
 
 window.setTitle = function(title="")
-	raylib.SetWindowTitle title
+	rl.SetWindowTitle title
 	self.title = title
 end function
 
 // Raylib only offers a toggle, so compare with the current state first.
 window.setFullScreen = function(full=true)
-	if (full != 0) == (raylib.IsWindowFullscreen != 0) then return
-	raylib.ToggleFullscreen
+	if (full != 0) == (rl.IsWindowFullscreen != 0) then return
+	rl.ToggleFullscreen
 end function
 
 // Mounting a disk is the user's act, not a program's: a drop is the user
@@ -117,7 +119,7 @@ _handleDrops = function
 	for i in range(0, 1)
 		if i >= dropped.len then break
 		if file.mountDropped(i, slots[i]) then
-			raylib.PlaySound diskInsertedSound
+			rl.PlaySound diskInsertedSound
 			print "Mounted " + dropped[i].name + " as " + slots[i]
 		else
 			print dropped[i].name + " is not a mountable disk"
@@ -155,19 +157,28 @@ screenCamera = {"offsetX": Display.screenLeft, "offsetY": Display.screenTop,
    "targetX": 0, "targetY": 0, "rotation": 0, "zoom": 1}
 
 _update = function(beginEndRaylibDrawing = true)
+	// A program can be time-sliced mid-draw, including when we have set all
+	// drawing to go to a render texture.  If we attempted to render the
+	// displays in the middle of that, it would make a mess.  So, skip
+	// the frame; the program closes its bracket within a slice or two and the
+	// next frame draws normally.
+	if beginEndRaylibDrawing and rl.rlGetActiveFramebuffer != 0 then return
+
 	// Not in updateCallbacks: that is a hook a user program may replace, and
 	// disks have to keep mounting whatever is running.
 	_handleDrops
-	if beginEndRaylibDrawing then raylib.BeginDrawing
-	raylib.BeginMode2D screenCamera
+	
+	// Render all displays.
+	if beginEndRaylibDrawing then rl.BeginDrawing
+	rl.BeginMode2D screenCamera
 	Display.RenderAll
-	raylib.EndMode2D
-	raylib.DrawTexture bezelTexture, 0, 0, bezelColor
+	rl.EndMode2D
+	rl.DrawTexture bezelTexture, 0, 0, bezelColor
 	for f in updateCallbacks; f; end for
-	raylib.DrawTextureEx stickerTexture, 
+	rl.DrawTextureEx stickerTexture, 
 	  [window.width - 56 - 32, window.height - 42 - 24],
-	  0, 64 / stickerTexture.width, raylib.WHITE
-	if beginEndRaylibDrawing then raylib.EndDrawing
+	  0, 64 / stickerTexture.width, rl.WHITE
+	if beginEndRaylibDrawing then rl.EndDrawing
 end function
 
 // Override (actually, shadow) the `yield` intrinsic to do our standard
