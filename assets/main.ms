@@ -33,6 +33,7 @@ rl.SetTraceLogLevel rl.LOG_WARNING
 rl.InitWindow 1024, 768
 rl.SetWindowTitle "Mini Micro 2"
 rl.SetTargetFPS 60
+rl.SetExitKey 0   // don't auto-quit on any keypress (including ESC)
 
 // Our own resources live on /hw, the hardware disk: the host mounts this
 // file's directory there at boot.  These used to be written relative to the
