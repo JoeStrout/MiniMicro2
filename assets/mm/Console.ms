@@ -396,7 +396,8 @@ end function
 Console._setCursorForInput = function(showSuggestion=true)
 	d = self.display
 	rc = self._cursorRowCol
-	d.setCursor rc[0], rc[1]
+	d.row = rc[0]
+	d.column = rc[1]
 
 	self._suggestion = null
 	if showSuggestion and @self.autocompleteCallback != null and
@@ -409,7 +410,8 @@ Console._setCursorForInput = function(showSuggestion=true)
 		self._write self._suggestion
 		d.color = saveColor
 		rc = self._cursorRowCol		// (again: printing may have scrolled)
-		d.setCursor rc[0], rc[1]
+		d.row = rc[0]
+		d.column = rc[1]
 	end if
 
 	d.showCursor
@@ -424,16 +426,19 @@ Console._clearAutocomplete = function
 	col = d.column
 	self._write " " * self._suggestion.len
 	self._suggestion = null
-	d.setCursor row, col
+	d.row = row
+	d.column = col
 end function
 
 // Wipe the current input line off the screen and draw a new one in its place.
 Console._replaceInput = function(newInput)
 	d = self.display
-	d.setCursor self._inputStartRow, self._inputStartCol
+	d.row = self._inputStartRow
+	d.column = self._inputStartCol
 	self._write " " * self._inputBuf.len
 	self._inputBuf = newInput
-	d.setCursor self._inputStartRow, self._inputStartCol
+	d.row = self._inputStartRow
+	d.column = self._inputStartCol
 	self._write self._inputBuf
 	self._inputIndex = self._inputBuf.len
 end function

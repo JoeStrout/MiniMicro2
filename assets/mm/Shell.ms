@@ -175,12 +175,25 @@ Shell.reset = function
 	self._errShown = false
 end function
 
+// The display the shell prints to: whatever the child's `text` is right now, as
+// in Mini Micro 1 (Shell.cs, DefaultTextDisplay).  Otherwise a program that
+// rebinds `text` leaves its output on one display and the prompt on another.
+// On a switch, the slot goes back to text mode, again as Mini Micro 1 does.
+// Only called between input lines, so the console never changes displays
+// under a line in progress.
 Shell.display = function
-	return self.console.display
+	con = self.console
+	t = self.interp.getGlobal("text")
+	if t isa TextDisplay and not refEquals(t, con.display) then
+		con.display.hideCursor
+		con.display = t
+		if t.index != null then t.mode = displayMode.text
+	end if
+	return con.display
 end function
 
 Shell.printLine = function(s="")
-	self.console.display.print s
+	self.display.print s
 end function
 
 //----------------------------------------------------------------------
@@ -295,7 +308,7 @@ Shell._afterSlice = function
 end function
 
 Shell._startPrompt = function
-	d = self.console.display
+	d = self.display
 	if d.column != 0 then d.nextLine
 	if self.interp.needMoreInput then
 		d.print self.env.morePrompt, ""
@@ -313,7 +326,7 @@ Shell._serveRequest = function
 		// Stay in this state until the line is committed; _handleLine above is
 		// what ends it.
 		if not self.console.inputInProgress then
-			if self.req.prompt != "" then self.console.display.print self.req.prompt, ""
+			if self.req.prompt != "" then self.display.print self.req.prompt, ""
 			self.console.startInput
 		end if
 		return
@@ -355,7 +368,7 @@ Shell.doBreak = function(silent=false)
 	self.req.action = null
 	self._errShown = true		// a stopped program is not an error to report
 	if wasRunning and not silent then
-		d = self.console.display
+		d = self.display
 		if d.column != 0 then d.nextLine
 		self.printLine "BREAK"
 	end if

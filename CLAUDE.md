@@ -166,10 +166,11 @@ render texture.
 - **Layers 7→0 rendered**, so 0 is on top
 - Cell `backColor` defaults to transparent, not black
 
-### MiniScript 2 gotchas
-No assignment hooks, so Mini Micro properties that were assignable are setter
-methods here: `Display.setMode`, `text.setCursor`, `TileDisplay.setExtent`.
-Assigning to `.mode`, `.row`, `.column`, `.extent` silently does nothing.
+### Property setters
+Mini Micro properties that react to assignment (`.mode`, `.row`, `.column`,
+`.extent`, a Sound's synthesis parameters) work by assignment, via MiniScript
+2 property setters (a `"x="` member) in the Soda lib.  The old stand-in
+methods -- `setMode`, `setCursor`, `setExtent` -- are gone.
 
 ## Code Style
 - Tabs for indentation

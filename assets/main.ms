@@ -68,11 +68,11 @@ Display.screenHeight = 640
 
 Display.Initialize
 
-// window: query and control the application window.
-// Mini Micro exposes window.width/height/fullScreen as assignable properties,
-// but MiniScript 2 has no assignment hook, so the setters are methods here.
+// window: query and control the application window.  As in Mini Micro,
+// width, height, fullScreen and title are properties you read and assign;
+// the assignments are property setters, installed below.
 globals.window = {}
-window.title = "Mini Micro 2"
+window._title = "Mini Micro 2"
 
 window.width = function
 	return rl.GetScreenWidth
@@ -86,19 +86,27 @@ window.fullScreen = function
 	return rl.IsWindowFullscreen
 end function
 
-window.setSize = function(w=960, h=640)
-	rl.SetWindowSize w, h
+window.title = function
+	return self._title
 end function
 
-window.setTitle = function(title="")
-	rl.SetWindowTitle title
-	self.title = title
+window["width="] = function(value)
+	rl.SetWindowSize value, rl.GetScreenHeight
+end function
+
+window["height="] = function(value)
+	rl.SetWindowSize rl.GetScreenWidth, value
 end function
 
 // Raylib only offers a toggle, so compare with the current state first.
-window.setFullScreen = function(full=true)
-	if (full != 0) == (rl.IsWindowFullscreen != 0) then return
+window["fullScreen="] = function(value)
+	if (value != 0) == (rl.IsWindowFullscreen != 0) then return
 	rl.ToggleFullscreen
+end function
+
+window["title="] = function(value)
+	rl.SetWindowTitle value
+	self._title = value
 end function
 
 // Mounting a disk is the user's act, not a program's: a drop is the user
@@ -169,8 +177,13 @@ _update = function(beginEndRaylibDrawing = true)
 	// disks have to keep mounting whatever is running.
 	_handleDrops
 	
-	// Render all displays.
-	if beginEndRaylibDrawing then rl.BeginDrawing
+	// Render all displays.  Clear first: nothing guarantees an opaque layer (a
+	// pixel display in slot 7 is mostly transparent), and without this whatever
+	// the back buffers last held shows through, alternating as they swap.
+	if beginEndRaylibDrawing then
+		rl.BeginDrawing
+		rl.ClearBackground [0, 0, 0, 255]
+	end if
 	rl.BeginMode2D screenCamera
 	Display.RenderAll
 	rl.EndMode2D
