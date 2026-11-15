@@ -166,12 +166,24 @@ screenCamera = {"offsetX": Display.screenLeft, "offsetY": Display.screenTop,
    "targetX": 0, "targetY": 0, "rotation": 0, "zoom": 1}
 
 _update = function(beginEndRaylibDrawing = true)
-	// A program can be time-sliced mid-draw, including when we have set all
-	// drawing to go to a render texture.  If we attempted to render the
-	// displays in the middle of that, it would make a mess.  So, skip
-	// the frame; the program closes its bracket within a slice or two and the
-	// next frame draws normally.
-	if beginEndRaylibDrawing and rl.rlGetActiveFramebuffer != 0 then return
+	// PixelDisplay leaves its render texture bound between draw calls (it is
+	// much faster), and a program can be time-sliced halfway through one.  So
+	// close that bracket for the frame and reopen it after, for whichever
+	// display held it, and a suspended draw carries on where it was.
+	heldBy = null
+	if beginEndRaylibDrawing then
+		heldBy = PixelDisplay._bracket.disp
+		heldAlpha = PixelDisplay._bracket.alpha
+		PixelDisplay._closeBracket
+	end if
+
+	// Any framebuffer still bound is one the program opened itself, and it
+	// may be mid-draw into it.  Skip the frame; it closes its own bracket
+	// within a slice or two, and the next frame draws normally.
+	if beginEndRaylibDrawing and rl.rlGetActiveFramebuffer != 0 then
+		if heldBy != null then heldBy._beginDraw heldAlpha
+		return
+	end if
 
 	// Not in updateCallbacks: that is a hook a user program may replace, and
 	// disks have to keep mounting whatever is running.
@@ -193,6 +205,7 @@ _update = function(beginEndRaylibDrawing = true)
 	  [window.width - 56 - 32, window.height - 42 - 24],
 	  0, 64 / stickerTexture.width, rl.WHITE
 	if beginEndRaylibDrawing then rl.EndDrawing
+	if heldBy != null then heldBy._beginDraw heldAlpha
 end function
 
 // Override (actually, shadow) the `yield` intrinsic to do our standard
