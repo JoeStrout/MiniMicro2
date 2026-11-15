@@ -18,6 +18,7 @@
 
 import "importUtil"
 ensureImport ["Console", "key"]
+import "Editor"
 
 _EOL = char(13)
 _TAB = char(9)
@@ -82,6 +83,7 @@ end function
 _childFileReadLines = @file.readLines
 
 _childResetEditorScrollPos = function
+	_req.resetEditor = true
 end function
 
 // The boot chime belongs to /sys/startup.ms (it is under env.bootOpts there),
@@ -116,6 +118,11 @@ Shell.env = null			// the `env` map, shared with the child
 Shell.req = null			// the request map, ditto
 Shell.bootChime = null		// sound for _startupChime; loaded by main.ms
 
+Shell.editor = null			// the open Editor, if any; main.ms draws it
+Shell._editorView = null	// [anc, pos, scrollX, scrollY] when it last closed
+Shell._flushKeys = false
+Shell._runAfterEdit = false
+
 Shell._errShown = false		// interp.error survives until the next line; print it once
 Shell._exiting = false
 Shell._bootStage = 0		// 0: /sys/startup.ms, 1: /usr/startup.ms, 2: at the prompt
@@ -125,7 +132,7 @@ Shell.Make = function(console, bootChime=null)
 	noob.console = console
 	noob.bootChime = bootChime
 	noob.env = Shell._makeEnv
-	noob.req = {"action": null, "prompt": "", "result": null}
+	noob.req = {"action": null, "prompt": "", "result": null, "resetEditor": false}
 	console.controlCHandler = @_controlCHandler
 	outer._theShell = noob
 	noob.reset
@@ -211,6 +218,21 @@ end function
 // this returns promptly, and the caller draws the frame.
 Shell.update = function
 	con = self.console
+
+	if self.editor != null then return self._updateEditor
+	if self._flushKeys then
+		// Whatever the console picked up while the editor had the keyboard.
+		while key.keyQueue
+			key.keyQueue.pull
+		end while
+		self._flushKeys = false
+		// Close & Run types "run" at the prompt, as Mini Micro 1 does.
+		if self._runAfterEdit then
+			self._runAfterEdit = false
+			self.doBreak true
+			self.console.typeInput "run" + char(10)
+		end if
+	end if
 
 	// A committed line goes to whoever was waiting for one.
 	if con.lineReady then
@@ -344,8 +366,45 @@ Shell._serveRequest = function
 		self.interp.loadKeepingGlobals src
 		self._afterSlice
 	else if action == "edit" then
-		self.printLine "The editor is not implemented yet."
+		self._openEditor
 	end if
+end function
+
+//----------------------------------------------------------------------
+// The editor
+//----------------------------------------------------------------------
+
+// Edit the child's _source, as Mini Micro 1 does (Shell.cs, Edit).  The view
+// comes back where it was unless a load has reset it since.
+Shell._openEditor = function
+	src = self.interp.getGlobal("_source")
+	if src isa string then src = src.split(_EOL)
+	if not src isa list then src = []
+	saved = self.interp.getGlobal("_sourceSaved")
+	ed = Editor.Make(src, self.interp.getGlobal("_sourceFile"), saved == null or saved)
+	v = self._editorView
+	if v != null and not self.req.resetEditor then
+		ed.anc = v[0]
+		ed.pos = v[1]
+		ed._load ed.lines		// clamps the positions to the text
+		ed.scrollX = v[2]
+		ed.scrollY = v[3]
+	end if
+	self.req.resetEditor = false
+	self.editor = ed
+end function
+
+Shell._updateEditor = function
+	ed = self.editor
+	ed.update
+	if not ed.done then return
+	self.interp.setGlobal "_source", ed.lines
+	if ed.path then self.interp.setGlobal "_sourceFile", ed.path
+	if ed.modified or not ed.dirty then self.interp.setGlobal "_sourceSaved", not ed.dirty
+	self._editorView = [ed.anc, ed.pos, ed.scrollX, ed.scrollY]
+	self.editor = null
+	self._flushKeys = true
+	self._runAfterEdit = (ed.result == "run")
 end function
 
 //----------------------------------------------------------------------

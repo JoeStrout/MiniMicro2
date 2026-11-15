@@ -144,7 +144,9 @@ end function
 // console's selection dragging reads mouse.x/y.
 globals.console = Console.Make(text)
 
+// The editor, while open, has the keyboard to itself.
 _consoleUpdate = function
+	if globals.hasIndex("shell") and shell.editor != null then return
 	console.update
 end function
 
@@ -199,6 +201,8 @@ _update = function(beginEndRaylibDrawing = true)
 	rl.BeginMode2D screenCamera
 	Display.RenderAll
 	rl.EndMode2D
+	// The editor is not a display; it draws straight to the window, over them.
+	if globals.hasIndex("shell") and shell.editor != null then shell.editor.draw
 	rl.DrawTexture bezelTexture, 0, 0, bezelColor
 	for f in updateCallbacks; f; end for
 	rl.DrawTextureEx stickerTexture, 
