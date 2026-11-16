@@ -281,7 +281,7 @@ end function
 Shell._loadFile = function(path)
 	if not file.exists(path) then return
 	lines = file.readLines(path)
-	if lines == null then
+	if lines isa error then
 		self.printLine "Unable to read " + path
 		return
 	end if

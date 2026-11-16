@@ -238,7 +238,7 @@ end function
 // through /hw only because the host mounted it before running this file.
 file.enterSandbox
 
-file.setdir "/usr"
+if file.exists("/usr") then file.setdir "/usr"
 
 // The shell owns everything from here.  It seeds a child interpreter from
 // `globals` as it stands right now, so anything a user program should be able
