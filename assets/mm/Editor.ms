@@ -38,10 +38,8 @@ LF = char(10)
 // gives 13-pixel cells, the same pitch Mini Micro 1's editor had.
 _codeSize = 22
 _numSize = 17
-_smallSize = 15
 _codeFont = null
 _numFont = null
-_smallFont = null
 
 // The glyphs MiniMicro-Regular has (from its cmap); raylib loads only ASCII
 // unless told otherwise.
@@ -59,8 +57,7 @@ _loadFonts = function(path)
 	cps = _codepoints
 	outer._codeFont = rl.LoadFontEx(path, _codeSize, cps, cps.len)
 	outer._numFont = rl.LoadFontEx(path, _numSize, cps, cps.len)
-	outer._smallFont = rl.LoadFontEx(path, _smallSize, cps, cps.len)
-	for f in [_codeFont, _numFont, _smallFont]
+	for f in [_codeFont, _numFont]
 		rl.SetTextureFilter f.texture, rl.TEXTURE_FILTER_BILINEAR
 	end for
 end function
@@ -136,17 +133,7 @@ _before = function(a, b)
 	return a[0] < b[0] or (a[0] == b[0] and a[1] < b[1])
 end function
 
-// MM1's IsTokenChar: what option-arrow skips over.  The dot counts only
-// within a number.
-_isTokenChar = function(c, state)
-	if c == "." then return state.numeric
-	if "0" <= c <= "9" then
-		state.numeric = true
-		return true
-	end if
-	if c <= "/" or ":" <= c <= "@" or "{" <= c <= "~" then return false
-	return true
-end function
+_isTokenChar = @EditorUI.isTokenChar
 
 _keyHit = function(k)
 	return rl.IsKeyPressed(k) or rl.IsKeyPressedRepeat(k)
@@ -174,14 +161,12 @@ Editor.autoSave = true
 Editor.Make = function(lines, path=null, saved=true)
 	_loadFonts Editor.fontPath
 	EditorUI.loadIcons Editor.iconDir
+	EditorUI.loadFonts
 	ui = EditorUI.UI
 	if _numFont then
-		ui.font = _numFont
-		ui.size = _numSize
+		ui.mono = _numFont
+		ui.monoSize = _numSize
 		ui.charW = rl.MeasureTextEx(_numFont, "M", _numSize, 0).x
-		ui.small = _smallFont
-		ui.smallSize = _smallSize
-		ui.smallW = rl.MeasureTextEx(_smallFont, "M", _smallSize, 0).x
 	end if
 	noob = new Editor
 	if not lines then lines = [""]
@@ -467,36 +452,26 @@ Editor.reindentLines = function(fromLine, toLine)
 	end while
 end function
 
-Editor.deleteBack = function
+// As MM1: delete by moving the caret with the selection anchored, so
+// byWord (alt or ctrl) works just as it does for the arrow keys.
+Editor.deleteBack = function(byWord=false)
 	if self.hasSelection then return self.setSelText("")
 	p = self.pos
 	if p == [0, 0] then return
-	// At or inside the indentation, delete all of it and the line break too.
-	tabs = _tabCount(self.lines[p[0]])
-	if p[1] <= tabs then
-		p[1] = tabs
-		if p[0] > 0 then
-			self.anc = [p[0] - 1, self.lines[p[0] - 1].len]
-		else
-			self.anc = [0, 0]
-		end if
+	// At or inside the indentation, take the line break too.
+	if p[1] <= _tabCount(self.lines[p[0]]) then
+		self.moveCursor -1, 0, true, true
+		self.moveCursor -1, 0, false, true
 	else
-		self.anc = [p[0], p[1] - 1]
+		self.moveCursor -1, 0, false, true, byWord
 	end if
 	self.setSelText ""
 end function
 
-Editor.deleteForward = function
+Editor.deleteForward = function(byWord=false)
 	if self.hasSelection then return self.setSelText("")
-	p = self.pos
-	if p[1] < self.lines[p[0]].len then
-		self.anc = [p[0], p[1] + 1]
-	else if p[0] < self.lines.len - 1 then
-		self.anc = [p[0] + 1, 0]
-	else
-		return
-	end if
-	self.setSelText ""
+	self.moveCursor 1, 0, false, true, byWord
+	if self.hasSelection then self.setSelText ""
 end function
 
 // Shift-Return: a new line, plus the ender for the block we are in (if
@@ -1385,8 +1360,8 @@ Editor._handleKeys = function(inp)
 	if _keyHit(rl.KEY_ENTER) or _keyHit(rl.KEY_KP_ENTER) then
 		if shift then self.insertWithEnder else self.setSelText LF
 	end if
-	if _keyHit(rl.KEY_BACKSPACE) then self.deleteBack
-	if _keyHit(rl.KEY_DELETE) then self.deleteForward
+	if _keyHit(rl.KEY_BACKSPACE) then self.deleteBack byWord
+	if _keyHit(rl.KEY_DELETE) then self.deleteForward byWord
 	if _keyHit(rl.KEY_TAB) then self.handleTab shift
 	if rl.IsKeyPressed(rl.KEY_ESCAPE) and self.findPanel then self.closeFind
 

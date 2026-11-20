@@ -16,13 +16,17 @@ rl = raylib
 TAB = char(9)
 LF = char(10)
 
+// MM1 drew its UI in Lucida Grande, at two sizes; DejaVuSans is the nearest
+// we can ship.  Only code, line numbers and paths are monospaced.
 UI = {}
-UI.font = null		// the editor sets these once its fonts are loaded
-UI.size = 17
+UI.fontPath = "/hw/fonts/DejaVuSans.ttf"
+UI.font = null		// menus, help tags, the help text
+UI.size = 18
+UI.small = null		// dialog labels, list headers, buttons
+UI.smallSize = 16
+UI.mono = null		// the editor sets this once its own fonts are loaded
+UI.monoSize = 17
 UI.charW = 10
-UI.small = null		// a smaller size, for labels
-UI.smallSize = 15
-UI.smallW = 9
 UI.icons = {}
 
 pal = {}
@@ -85,6 +89,16 @@ loadIcons = function(dir)
 	end for
 end function
 
+loadFonts = function
+	if UI.font or not rl.IsWindowReady then return
+	cps = range(32, 126) + range(160, 255) + [8211, 8212, 8216, 8217, 8220, 8221, 8226, 8230]
+	UI.font = rl.LoadFontEx(UI.fontPath, UI.size, cps, cps.len)
+	UI.small = rl.LoadFontEx(UI.fontPath, UI.smallSize, cps, cps.len)
+	for f in [UI.font, UI.small]
+		rl.SetTextureFilter f.texture, rl.TEXTURE_FILTER_BILINEAR
+	end for
+end function
+
 // Everything a frame's widgets may want, read once: typed characters come
 // from a queue, so only one reader may drain it.
 readInput = function
@@ -110,13 +124,33 @@ readInput = function
 	return inp
 end function
 
+// MM1's IsTokenChar: what option-arrow skips over.  The dot counts only
+// within a number.
+isTokenChar = function(c, state)
+	if c == "." then return state.numeric
+	if "0" <= c <= "9" then
+		state.numeric = true
+		return true
+	end if
+	if c <= "/" or ":" <= c <= "@" or "{" <= c <= "~" then return false
+	return true
+end function
+
 //----------------------------------------------------------------------
 // Drawing helpers
 //----------------------------------------------------------------------
 
 textWidth = function(s, small=false)
-	if small then return s.len * UI.smallW
-	return s.len * UI.charW		// the font is monospaced
+	if small then
+		if UI.small then return rl.MeasureTextEx(UI.small, s, UI.smallSize, 0).x
+		return s.len * UI.smallSize * 0.55
+	end if
+	if UI.font then return rl.MeasureTextEx(UI.font, s, UI.size, 0).x
+	return s.len * UI.size * 0.55
+end function
+
+monoWidth = function(s)
+	return s.len * UI.charW
 end function
 
 drawText = function(s, x, y, c=null, small=false)
@@ -134,11 +168,29 @@ drawTextIn = function(s, x, r, c=null, small=false)
 	drawText s, x, r[1] + floor((r[3] - sz) / 2), c, small
 end function
 
-// Shorten s from the left to fit in width w.
+drawMono = function(s, x, y, c=null)
+	if c == null then c = pal.text
+	if UI.mono then rl.DrawTextEx UI.mono, s, [x, y], UI.monoSize, 0, c
+end function
+
+drawMonoIn = function(s, x, r, c=null)
+	drawMono s, x, r[1] + floor((r[3] - UI.monoSize) / 2), c
+end function
+
+// Shorten monospaced s from the left to fit in width w.
 fitLeft = function(s, w)
 	n = floor(w / UI.charW)
 	if s.len <= n then return s
 	return "..." + s[s.len - n + 3:]
+end function
+
+// Shorten proportional s from the right to fit in width w.
+fitRight = function(s, w, small=false)
+	if textWidth(s, small) <= w then return s
+	while s and textWidth(s + "...", small) > w
+		s = s[:-1]
+	end while
+	return s + "..."
 end function
 
 roundRect = function(r, radius, c)
@@ -258,12 +310,38 @@ TextField._moveTo = function(p, extend)
 	if not extend then self.anchor = self.caret
 end function
 
+// Where option-arrow goes from the caret: past any non-token characters,
+// then past the token, as the editor does.
+TextField._wordFrom = function(d)
+	s = self.text
+	i = self.caret
+	st = {"numeric": false}
+	if d < 0 then
+		while i > 0 and not isTokenChar(s[i-1], st)
+			i -= 1
+		end while
+		while i > 0 and isTokenChar(s[i-1], st)
+			i -= 1
+		end while
+	else
+		while i < s.len and not isTokenChar(s[i], st)
+			i += 1
+		end while
+		while i < s.len and isTokenChar(s[i], st)
+			i += 1
+		end while
+	end if
+	return i
+end function
+
 TextField._step = function(d, inp)
 	if self.anchor != self.caret and not inp.shift and not inp.mod then
 		r = self._selRange
 		if d < 0 then self._moveTo r[0], false else self._moveTo r[1], false
-	else if inp.mod then
+	else if inp.cmd then
 		if d < 0 then self._moveTo 0, inp.shift else self._moveTo self.text.len, inp.shift
+	else if inp.alt or inp.ctrl then
+		self._moveTo self._wordFrom(d), inp.shift
 	else
 		self._moveTo self.caret + d, inp.shift
 	end if
@@ -276,12 +354,17 @@ TextField.handleKeys = function(inp)
 	for c in inp.chars
 		self._replaceSel c
 	end for
+	byWord = inp.alt or inp.ctrl
 	if keyHit(rl.KEY_BACKSPACE) then
-		if self.anchor == self.caret then self.anchor = _max(0, self.caret - 1)
+		if self.anchor == self.caret then
+			if byWord then self.anchor = self._wordFrom(-1) else self.anchor = _max(0, self.caret - 1)
+		end if
 		self._replaceSel ""
 	end if
 	if keyHit(rl.KEY_DELETE) then
-		if self.anchor == self.caret then self.anchor = _min(self.text.len, self.caret + 1)
+		if self.anchor == self.caret then
+			if byWord then self.anchor = self._wordFrom(1) else self.anchor = _min(self.text.len, self.caret + 1)
+		end if
 		self._replaceSel ""
 	end if
 	if keyHit(rl.KEY_LEFT) then self._step -1, inp
@@ -307,9 +390,22 @@ TextField.handleKeys = function(inp)
 	return null
 end function
 
+// Fields use the small UI font, so positions are measured, not counted.
+TextField._xOf = function(i)
+	return textWidth(self.text[:i], true)
+end function
+
 TextField._indexAtX = function(x)
-	i = round((x - self.rect[0] - 4 + self.scroll) / UI.charW)
-	return _clamp(i, 0, self.text.len)
+	x = x - self.rect[0] - 4 + self.scroll
+	prev = 0
+	for i in range(1, self.text.len)
+		w = self._xOf(i)
+		if w >= x then
+			if x - prev < w - x then return i - 1 else return i
+		end if
+		prev = w
+	end for
+	return self.text.len
 end function
 
 // True if the mouse is this field's business this frame (so it takes focus).
@@ -334,22 +430,22 @@ TextField.draw = function(focused)
 	else
 		rl.DrawRectangleLines r[0], r[1], r[2], r[3], pal.fieldBorder
 	end if
-	cw = UI.charW
 	inner = r[2] - 10
-	cx = self.caret * cw
+	cx = self._xOf(self.caret)
 	if cx - self.scroll > inner then self.scroll = cx - inner
 	if cx < self.scroll then self.scroll = cx
-	if self.text.len * cw < inner then self.scroll = 0
+	if self._xOf(self.text.len) < inner then self.scroll = 0
 	x0 = r[0] + 4 - self.scroll
 	rl.BeginScissorMode r[0] + 2, r[1] + 2, r[2] - 4, r[3] - 4
 	sr = self._selRange
 	if focused and sr[0] < sr[1] then
-		rl.DrawRectangle x0 + sr[0] * cw, r[1] + 3, (sr[1] - sr[0]) * cw, r[3] - 6, pal.selection
+		sx = self._xOf(sr[0])
+		rl.DrawRectangle x0 + sx, r[1] + 3, self._xOf(sr[1]) - sx, r[3] - 6, pal.selection
 	end if
 	if self.text == "" and not focused then
-		drawTextIn self.placeholder, r[0] + 4, r, pal.dimText
+		drawTextIn self.placeholder, r[0] + 4, r, pal.dimText, true
 	else
-		drawTextIn self.text, x0, r
+		drawTextIn self.text, x0, r, null, true
 	end if
 	if focused and sr[0] == sr[1] and time % 1 < 0.6 then
 		rl.DrawRectangle x0 + cx - 1, r[1] + 4, 2, r[3] - 8, pal.text
@@ -665,9 +761,9 @@ Toolbar.draw = function(ed)
 	msg = ed.statusMessage
 	if msg then
 		if msg[1] then c = pal.error else c = [0, 110, 0, 255]
-		drawTextIn fitLeft(msg[0], pathW), r[0], r, c
+		drawTextIn fitRight(msg[0], pathW), r[0], r, c
 	else if ed.path then
-		drawTextIn fitLeft(ed.path, pathW), r[0], r
+		drawMonoIn fitLeft(ed.path, pathW), r[0], r
 	end if
 
 	if self.autoSave.visible then
@@ -788,7 +884,7 @@ end function
 GoToDialog.draw = function(ed)
 	self.drawFrame
 	f = self.field.rect
-	drawTextIn "Line number:", self.rect[0] + 18, f
+	drawTextIn "Line number:", self.rect[0] + 18, f, null, true
 	self.field.draw true
 	self.drawButtons
 end function
@@ -852,13 +948,13 @@ SaveAsDialog.draw = function(ed)
 	self.drawFrame
 	r = self.rect
 	y = r[1] + self.headerH + 12
-	drawText "Save in:", r[0] + 18, y
+	drawText "Save in:", r[0] + 18, y + 1, null, true
 	dir = self.dir
 	if dir[-1] != "/" then dir += "/"
-	drawText fitLeft(dir, r[2] - 118), r[0] + 100, y
-	drawTextIn "Name:", r[0] + 18, self.field.rect
+	drawMono fitLeft(dir, r[2] - 118), r[0] + 100, y
+	drawTextIn "Name:", r[0] + 18, self.field.rect, null, true
 	self.field.draw true
-	if self.error then drawText self.error, r[0] + 18, r[1] + r[3] - 33, pal.error
+	if self.error then drawText fitRight(self.error, r[2] - 210, true), r[0] + 18, r[1] + r[3] - 30, pal.error, true
 	self.drawButtons
 end function
 
@@ -1397,7 +1493,7 @@ FindPanel.draw = function(ed)
 	rl.DrawRectangle hr[0], hr[1] + 21, hr[2], 1, pal.divider
 	drawTextIn "Line", lr[0] + 3, hr, null, true
 	drawTextIn "Type", lr[0] + 62, hr, null, true
-	drawTextIn self.status, lr[0] + 122, hr, null, true
+	drawTextIn fitRight(self.status, checkX - lr[0] - 128, true), lr[0] + 122, hr, null, true
 	drawCheck checkX + 9, hr[1] + 3, 16, pal.text
 	for x in [57, 117]
 		rl.DrawRectangle lr[0] + x, hr[1], 1, 22, pal.divider
@@ -1420,9 +1516,9 @@ FindPanel.draw = function(ed)
 		rr = [rows[0], y, rows[2], rh]
 		if i == self.selRow then rl.DrawRectangle rr[0], rr[1], rr[2], rr[3], pal.selection
 		num = str(m.line + 1)
-		drawTextIn "0" * _max(0, 4 - num.len) + num, lr[0] + 3, rr
+		drawMonoIn "0" * _max(0, 4 - num.len) + num, lr[0] + 3, rr
 		label = _typeLabels[m.type]
-		drawTextIn label, lr[0] + 87 - textWidth(label) / 2, rr, _typeColors[m.type]
+		drawMonoIn label, lr[0] + 87 - monoWidth(label) / 2, rr, _typeColors[m.type]
 		// Trim the left of a long line so the match stays in view.
 		s = m.text.replace(TAB, " ")
 		st = m.start
@@ -1431,7 +1527,7 @@ FindPanel.draw = function(ed)
 		st -= trim
 		if m.replaced then hc = pal.replaced else hc = pal.match
 		rl.DrawRectangle textX + st * cw, y + 2, m.len * cw, rh - 4, hc
-		drawTextIn s, textX, rr
+		drawMonoIn s, textX, rr
 		drawCheckbox checkX + 9, y + 4, m.checked
 	end for
 	rl.EndScissorMode
@@ -1450,8 +1546,10 @@ EditorUI.UI = UI
 EditorUI.pal = pal
 EditorUI.roundRect = @roundRect
 EditorUI.loadIcons = @loadIcons
+EditorUI.loadFonts = @loadFonts
 EditorUI.readInput = @readInput
 EditorUI.keyHit = @keyHit
+EditorUI.isTokenChar = @isTokenChar
 EditorUI.chord = @chord
 EditorUI.TextField = TextField
 EditorUI.Button = Button
